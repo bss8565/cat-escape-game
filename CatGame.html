@@ -1,0 +1,238 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <title>읽기 싫다옹! : 냥이의 책 탈출 대모험</title>
+  <style>
+    body {
+      margin: 0;
+      overflow: hidden;
+      background-color: #f0f0f0;
+      font-family: 'Arial';
+    }
+    canvas {
+      display: block;
+      margin: 0 auto;
+      background-color: #fff;
+      border: 2px solid #333;
+    }
+  </style>
+</head>
+<body>
+<canvas id="gameCanvas" width="800" height="300"></canvas>
+<script>
+  const canvas = document.getElementById('gameCanvas');
+  const ctx = canvas.getContext('2d');
+
+  // 이미지 로딩
+  const catImgs = [new Image(), new Image()];
+  catImgs[0].src = 'cat1.png';
+  catImgs[1].src = 'cat2.png';
+  const bookImg = new Image(); bookImg.src = 'book.png';
+  const fishImg = new Image(); fishImg.src = 'fish.png';
+  const startImg = new Image(); startImg.src = 'startscreen.png';
+  const bgImgs = [new Image(), new Image(), new Image()];
+  bgImgs[0].src = 'bg1.png'; bgImgs[1].src = 'bg2.png'; bgImgs[2].src = 'bg3.png';
+
+  // 사운드
+  const jumpSound = new Audio('meow.mp3');
+  const eatSound = new Audio('yum.mp3');
+  const hitSound = new Audio('ouch.mp3');
+  const gameoverSound = new Audio('gameover.mp3');
+  const bgm = new Audio('bgm.mp3');
+  bgm.loop = true;
+  bgm.volume = 0.5;
+
+  // 시작화면
+  let gameStarted = false;
+
+  // 게임 상태
+  let player = { x: 50, y: 240, width: 40, height: 40, vy: 0, jumping: false };
+  let obstacle = { x: 800, y: 240, width: 40, height: 40 };
+  let coin = { x: 1200, y: 200, width: 50, height: 50 };
+  let score = 0;
+  let lives = 3;
+  let gameOver = false;
+  let obstacleSpeed = 15; // 속도 증가
+  let frameCount = 0;
+  let catFrame = 0;
+  let catFrameTimer = 0;
+
+  let bgX = [0, 800, 1600];
+  let currentBgIndex = 0;
+
+  const encouragements = {
+    1000: "좋아! 조금만 더 뛰자옹!😺",
+    3000: "오오~ 제법인데?😼",
+    5000: "책 따위 무섭지 않다옹!😾",
+    7000: "책 탈출 프로냥이!😸",
+    10000: "물고기 파티를 열 시간이다옹!🐈🐈‍⬛",
+    15000: "냐하~ 나 천재냥이야!😻",
+    20000: "냥생 최고 기록이다옹!!🙀"
+  };
+
+  let shownEncouragements = new Set();
+
+  function drawBackground() {
+    for (let i = 0; i < 3; i++) {
+      ctx.drawImage(bgImgs[i], bgX[i], 0, 800, 300);
+    }
+  }
+
+  function updateBackground() {
+    for (let i = 0; i < 3; i++) {
+      bgX[i] -= obstacleSpeed / 2;
+      if (bgX[i] <= -800) bgX[i] += 2400;
+    }
+  }
+
+  function drawPlayer() {
+    ctx.drawImage(catImgs[catFrame], player.x, player.y, player.width, player.height);
+  }
+
+  function drawObstacle() {
+    ctx.drawImage(bookImg, obstacle.x, obstacle.y, obstacle.width, obstacle.height);
+  }
+
+  function drawCoin() {
+    ctx.drawImage(fishImg, coin.x, coin.y, coin.width, coin.height);
+  }
+
+  function drawHUD() {
+    ctx.fillStyle = '#fff';
+    ctx.font = '20px Arial';
+    ctx.fillText("Score: " + score, 10, 25);
+    ctx.fillText("Lives: " + lives, 10, 50);
+  }
+
+  function resetObstacle() {
+    obstacle.x = 800 + Math.random() * 400;
+  }
+
+  function resetCoin() {
+    coin.x = 1000 + Math.random() * 500;
+    coin.y = 180 + Math.random() * 40;
+  }
+
+  function checkEncouragement() {
+    for (let key in encouragements) {
+      const k = parseInt(key);
+      if (score >= k && !shownEncouragements.has(k)) {
+        shownEncouragements.add(k);
+        alert(encouragements[k]);
+      }
+    }
+  }
+
+  function update() {
+    if (!gameStarted || gameOver) return;
+
+    frameCount++;
+    score++;
+
+    // 격려 메시지 확인
+    checkEncouragement();
+
+    // 애니메이션 프레임 변경
+    catFrameTimer++;
+    if (catFrameTimer >= 30) {
+      catFrame = (catFrame + 1) % 2;
+      catFrameTimer = 0;
+    }
+
+    // 난이도 증가
+    if (frameCount % 300 === 0) obstacleSpeed += 0.5;
+
+    // 중력 적용
+    if (player.jumping) {
+      player.vy += 1.5;
+      player.y += player.vy;
+      if (player.y >= 240) {
+        player.y = 240;
+        player.jumping = false;
+        player.vy = 0;
+      }
+    }
+
+    obstacle.x -= obstacleSpeed;
+    if (obstacle.x + obstacle.width < 0) resetObstacle();
+
+    coin.x -= obstacleSpeed;
+    if (coin.x + coin.width < 0) resetCoin();
+
+    updateBackground();
+
+    // 충돌 체크
+    if (
+      player.x < obstacle.x + obstacle.width &&
+      player.x + player.width > obstacle.x &&
+      player.y < obstacle.y + obstacle.height &&
+      player.y + player.height > obstacle.y
+    ) {
+      lives--;
+      hitSound.play();
+      if (lives <= 0) {
+        gameOver = true;
+        bgm.pause();
+        gameoverSound.play();
+        setTimeout(() => {
+          alert("안돼~ 날 구해줄거지옹..?😿🐾");
+          location.reload();
+        }, 100);
+      } else {
+        resetObstacle();
+      }
+    }
+
+    if (
+      player.x < coin.x + coin.width &&
+      player.x + player.width > coin.x &&
+      player.y < coin.y + coin.height &&
+      player.y + player.height > coin.y
+    ) {
+      score += 100;
+      eatSound.play();
+      resetCoin();
+    }
+  }
+
+  function draw() {
+    if (!gameStarted) {
+      ctx.drawImage(startImg, 0, 0, 800, 300);
+      ctx.fillStyle = '#fff';
+      ctx.font = '20px Arial';
+      ctx.fillText("스페이스바를 눌러 탈출하라옹!", 260, 280);
+      return;
+    }
+
+    drawBackground();
+    drawPlayer();
+    drawObstacle();
+    drawCoin();
+    drawHUD();
+  }
+
+  function gameLoop() {
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    update();
+    draw();
+    requestAnimationFrame(gameLoop);
+  }
+
+  window.onload = () => {
+    gameLoop();
+  };
+
+  window.addEventListener('keydown', (e) => {
+    if (!gameStarted && e.code === 'Space') {
+      gameStarted = true;
+      bgm.play();
+    } else if (e.code === 'Space' && !player.jumping && !gameOver) {
+      player.vy = -18;
+      player.jumping = true;
+      jumpSound.play();
+    }
+  });
+</script>
+</body>
+</html>
